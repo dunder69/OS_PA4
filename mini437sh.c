@@ -9,10 +9,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 
 #define MINI437_RL_BUFSIZE 1024
-#define MINI347_TOK_BUFSIZE 64
-#define MINI347_TOK_DELIM " \t\r\n\a"
+#define MINI437_TOK_BUFSIZE 64
+#define MINI437_TOK_DELIM " \t\r\n\a"
 
 char *history[10];
 int histIt = 0; //history iterator
@@ -20,9 +21,9 @@ int histIt = 0; //history iterator
 /*
   Function Declarations for builtin shell commands:
  */
-int mini437_cd(char **args);
-int mini437_help(char **args);
-int mini437_last10(char **args);
+int cd(char **args);
+int help(char **args);
+void last10(int);
 int mini437_exit(char **args);
 
 /*
@@ -36,9 +37,9 @@ char *builtin_str[] = {
 };
 
 int (*builtin_func[]) (char **) = {
-  &mini437_cd,
-  &mini437_help,
-  &mini437_last10,
+  &cd,
+  &help,
+  &last10,
   &mini437_exit
 };
 
@@ -46,16 +47,12 @@ int mini437_num_builtins() {
   return sizeof(builtin_str) / sizeof(char *);
 }
 
-/*
-  Builtin function implementations.
-*/
 
-/**
-   @brief Bultin command: change directory.
-   @param args List of args.  args[0] is "cd".  args[1] is the directory.
-   @return Always returns 1, to continue executing.
- */
-int mini437_cd(char **args)
+// Built in function implementations.
+
+
+//Change Directory 
+int cd(char **args)
 {
   if (args[1] == NULL) {
     fprintf(stderr, "mini437: expected argument to \"cd\"\n");
@@ -67,12 +64,9 @@ int mini437_cd(char **args)
   return 1;
 }
 
-/**
-   @brief Builtin command: print help.
-   @param args List of args.  Not examined.
-   @return Always returns 1, to continue executing.
- */
-int mini437_help(char **args)
+
+//Help
+int help(char **args)
 {
   int i;
   printf("Type program names and arguments, and hit enter.\n");
@@ -86,34 +80,31 @@ int mini437_help(char **args)
   return 1;
 }
 
-
-int mini437_last10(char **args)
+//Shows last 10 nonempty entered ommands
+void last10(int signal)
 {
-  printf("history[0] = %s \n", history[0]);
-  printf("history[1] = %s \n", history[1]);
   int i;
-  for(i=0;i<10;i++){
+  for(i=0;i<histIt;i++){
     printf("%s", history[i]);
     printf("\n");
+
   }
 }
 
-/**
-   @brief Builtin command: exit.
-   @param args List of args.  Not examined.
-   @return Always returns 0, to terminate execution.
- */
+//exits
 int mini437_exit(char **args)
 {
   // TODO: Kill all background processes. 
+  int i;
+  for(i=0;i<histIt;i++){
+    free(history[i]);
+  }
+
   return 0;
 }
 
-/**
-  @brief Launch a program and wait for it to terminate.
-  @param args Null terminated list of arguments (including program).
-  @return Always returns 1, to continue execution.
- */
+
+//Launch a program and wait for it to terminate.
 int mini437_launch(char **args)
 {
   pid_t pid, wpid;
@@ -139,11 +130,8 @@ int mini437_launch(char **args)
   return 1;
 }
 
-/**
-   @brief Execute shell built-in or launch program.
-   @param args Null terminated list of arguments.
-   @return 1 if the shell should continue running, 0 if it should terminate
- */
+
+//Execute shell built-in or launch program.
 int mini437_execute(char **args)
 {
   int i;
@@ -163,10 +151,7 @@ int mini437_execute(char **args)
 }
 
 
-/**
-   @brief Read a line of input from stdin.
-   @return The line from stdin.
- */
+//Read a line of input from stdin.
 char *mini437_read_line(void)
 {
   char *line = NULL;
@@ -176,14 +161,11 @@ char *mini437_read_line(void)
 }
 
 
-/**
-   @brief Split a line into tokens (very naively).
-   @param line The line.
-   @return Null-terminated array of tokens.
- */
+
+//Split a line into tokens (very naively).
 char **mini437_split_line(char *line)
 {
-  int bufsize = MINI347_TOK_BUFSIZE, position = 0;
+  int bufsize = MINI437_TOK_BUFSIZE, position = 0;
   char **tokens = malloc(bufsize * sizeof(char*));
   char *token;
 
@@ -192,13 +174,13 @@ char **mini437_split_line(char *line)
     exit(EXIT_FAILURE);
   }
 
-  token = strtok(line, MINI347_TOK_DELIM);
+  token = strtok(line, MINI437_TOK_DELIM);
   while (token != NULL) {
     tokens[position] = token;
     position++;
 
     if (position >= bufsize) {
-      bufsize += MINI347_TOK_BUFSIZE;
+      bufsize += MINI437_TOK_BUFSIZE;
       tokens = realloc(tokens, bufsize * sizeof(char*));
       if (!tokens) {
         fprintf(stderr, "mini437: allocation error\n");
@@ -206,15 +188,14 @@ char **mini437_split_line(char *line)
       }
     }
 
-    token = strtok(NULL, MINI347_TOK_DELIM);
+    token = strtok(NULL, MINI437_TOK_DELIM);
   }
   tokens[position] = NULL;
   return tokens;
 }
 
-/**
-   @brief Loop getting input and executing it.
- */
+
+//Loop getting input and executing it.
 void mini437_loop(void)
 {
   char *line;
@@ -224,27 +205,23 @@ void mini437_loop(void)
   do {
     printf("mini437-PM: ");
     line = mini437_read_line();
-    printf("line = %s \n", line);
     args = mini437_split_line(line);
     status = mini437_execute(args);
 
     if(histIt < 10){
-      if(line != NULL){
-        printf("in for loop, line = %s \n", line);
-        history[histIt] = line;
-        printf("in for loop, history[%d] = %s \n", histIt, history[histIt]);
+      if(line != NULL && line[0] != '\n'){
+        history[histIt] = malloc(80);
+        strcpy(history[histIt], line);
         histIt = histIt + 1;
-        printf("after +1, histIt = %d \n", histIt);
-        printf("in for loop, history[0] = %s \n", history[0]);
       }
     }
-    else if(histIt == 10){
-      if(line != NULL){
+    else if(histIt >= 10){
+      if(line != NULL && line[0] != '\n'){
         int i;
         for(i=1;i<10;i++){
-          history[(histIt-1)] = history[histIt];
+          strcpy(history[i-1], history[i]);
         }
-        history[10] = line;
+        strcpy(history[9], line);
       }
     }
 
@@ -253,15 +230,13 @@ void mini437_loop(void)
   } while (status);
 }
 
-/**
-   @brief Main entry point.
-   @param argc Argument count.
-   @param argv Argument vector.
-   @return status code
- */
+
+
+
+
 int main(int argc, char **argv)
 {
-  // Load config files, if any.
+  signal(SIGINT, last10); //Ctrl + c handler
 
   // Run command loop.
   mini437_loop();
