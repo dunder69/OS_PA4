@@ -21,12 +21,11 @@
 char *history[10];
 int histIt = 0; //history iterator
 
-/*
-  Function Declarations for builtin shell commands:
- */
+/* Function declarations for built-in shell commands */
 int cd(char **args);
 int help(char **args);
-void last10(int);
+// void last10(int);
+int last10();
 int mini437_exit(char **args);
 
 /*
@@ -50,9 +49,16 @@ int mini437_num_builtins() {
   return sizeof(builtin_str) / sizeof(char *);
 }
 
+// Ctrl+C signal handler
+void sigint_handler(int signal)
+{
+  printf("\n");
+  last10();
+}
 
-// Built in function implementations.
-
+/************************************/
+/* Bult-in function implementations */
+/************************************/
 
 //Change Directory 
 int cd(char **args)
@@ -84,13 +90,24 @@ int help(char **args)
 }
 
 //Shows last 10 nonempty entered ommands
-void last10(int signal)
+// void last10(int signal)
+// {
+//   int i;
+//   for(i=0;i<histIt;i++){
+//     printf("%4d %s", (i+1), history[i]);
+//     printf("\n");
+//   }
+// }
+
+// Shows the last 10 nonempty entered commands
+int last10()
 {
   int i;
-  for(i=0;i<histIt;i++){
+  for (i = 0; i < histIt; i++) {
     printf("%4d %s", (i+1), history[i]);
     printf("\n");
   }
+  return 1;
 }
 
 //exits
@@ -130,30 +147,29 @@ int mini437_launch(char **args)
   }
   printf("\n");
 
+  // Begin executing process
   pid = fork();
-  if (pid == 0) { 
-    // Child process
+  if (pid == 0) { // Child process
     if (execvp(args[0], args) == -1) {
       perror("mini437");
     }
     exit(EXIT_FAILURE);
-
-  } else if (pid < 0) {
-    // Error forking
+  } else if (pid < 0) { // Error forking
     perror("mini437");
-  } else {
-    // Parent process
+  } else { // Parent process
     do {
       wpid = waitpid(pid, &status, WUNTRACED);
     } while (!WIFEXITED(status) && !WIFSIGNALED(status));
   }
+  
   // End process timing
-    getrusage(RUSAGE_SELF, &usage);
-    endUsrTime = usage.ru_utime;
-    endSysTime = usage.ru_stime;
+  getrusage(RUSAGE_SELF, &usage);
+  endUsrTime = usage.ru_utime;
+  endSysTime = usage.ru_stime;
 
-    printf("PostRun(PID:%d): %s -- user time %d system time %d\n",
-      pid, args[0], endUsrTime.tv_usec, endSysTime.tv_usec);
+  printf("PostRun(PID:%d): %s -- user time %d system time %d\n",
+    pid, args[0], endUsrTime.tv_usec, endSysTime.tv_usec);
+  
   return 1;
 }
 
@@ -235,15 +251,15 @@ void mini437_loop(void)
     args = mini437_split_line(line);
     status = mini437_execute(args);
 
-    if(histIt < 10) {
-      if(line != NULL && line[0] != '\n'){
+    if (histIt < 10) {
+      if (line != NULL && line[0] != '\n') {
         history[histIt] = malloc(80);
         strcpy(history[histIt], line);
         histIt = histIt + 1;
       }
     }
     else if(histIt >= 10) {
-      if(line != NULL && line[0] != '\n'){
+      if (line != NULL && line[0] != '\n') {
         int i;
         for(i=1;i<10;i++){
           strcpy(history[i-1], history[i]);
@@ -254,13 +270,15 @@ void mini437_loop(void)
 
     free(line);
     free(args);
+
   } while (status);
 }
 
 
 int main(int argc, char **argv)
 {
-  signal(SIGINT, last10); //Ctrl + c handler
+  // signal(SIGINT, last10); //Ctrl + c handler
+  signal(SIGINT, sigint_handler);
 
   // Run command loop.
   mini437_loop();
