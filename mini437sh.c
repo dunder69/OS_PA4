@@ -11,6 +11,9 @@
 #include <string.h>
 #include <signal.h>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 #define MINI437_RL_BUFSIZE 1024
 #define MINI437_TOK_BUFSIZE 64
 #define MINI437_TOK_DELIM " \t\r\n\a"
@@ -85,9 +88,8 @@ void last10(int signal)
 {
   int i;
   for(i=0;i<histIt;i++){
-    printf("%s", history[i]);
+    printf("%4d %s", (i+1), history[i]);
     printf("\n");
-
   }
 }
 
@@ -110,13 +112,32 @@ int mini437_launch(char **args)
   pid_t pid, wpid;
   int status;
 
+  struct rusage usage;
+  struct timeval startUsrTime, endUsrTime;
+  struct timeval startSysTime, endSysTime;
+
+  // Start timing process
+  getrusage(RUSAGE_SELF, &usage);
+  startUsrTime = usage.ru_utime;
+  startSysTime = usage.ru_stime;
+
+  // Print pre-run command line information
+  printf("PreRun: %s ", args[0]);
+  int i = 1;
+  while (args[i] != NULL) {
+    printf("%d:%s, ", i, args[i]);
+    i++;
+  }
+  printf("\n");
+
   pid = fork();
-  if (pid == 0) {
+  if (pid == 0) { 
     // Child process
     if (execvp(args[0], args) == -1) {
       perror("mini437");
     }
     exit(EXIT_FAILURE);
+
   } else if (pid < 0) {
     // Error forking
     perror("mini437");
@@ -126,7 +147,13 @@ int mini437_launch(char **args)
       wpid = waitpid(pid, &status, WUNTRACED);
     } while (!WIFEXITED(status) && !WIFSIGNALED(status));
   }
+  // End process timing
+    getrusage(RUSAGE_SELF, &usage);
+    endUsrTime = usage.ru_utime;
+    endSysTime = usage.ru_stime;
 
+    printf("PostRun(PID:%d): %s -- user time %d system time %d\n",
+      pid, args[0], endUsrTime.tv_usec, endSysTime.tv_usec);
   return 1;
 }
 
@@ -203,19 +230,19 @@ void mini437_loop(void)
   int status;
 
   do {
-    printf("mini437-PM: ");
+    printf("mini437-PM-ES > ");
     line = mini437_read_line();
     args = mini437_split_line(line);
     status = mini437_execute(args);
 
-    if(histIt < 10){
+    if(histIt < 10) {
       if(line != NULL && line[0] != '\n'){
         history[histIt] = malloc(80);
         strcpy(history[histIt], line);
         histIt = histIt + 1;
       }
     }
-    else if(histIt >= 10){
+    else if(histIt >= 10) {
       if(line != NULL && line[0] != '\n'){
         int i;
         for(i=1;i<10;i++){
@@ -229,9 +256,6 @@ void mini437_loop(void)
     free(args);
   } while (status);
 }
-
-
-
 
 
 int main(int argc, char **argv)
