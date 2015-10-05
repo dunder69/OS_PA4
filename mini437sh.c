@@ -20,6 +20,7 @@
 
 char *history[10];
 int histIt = 0; //history iterator
+int background = 0; // flag for background processes
 
 /* Function declarations for built-in shell commands */
 int cd(char **args);
@@ -168,7 +169,9 @@ int mini437_launch(char **args)
   endSysTime = usage.ru_stime;
 
   printf("PostRun(PID:%d): %s -- user time %d system time %d\n",
-    pid, args[0], endUsrTime.tv_usec, endSysTime.tv_usec);
+    pid, args[0], 
+    (endUsrTime.tv_usec - startUsrTime.tv_usec), 
+    (endSysTime.tv_usec - startSysTime.tv_usec));
   
   return 1;
 }
@@ -200,6 +203,13 @@ char *mini437_read_line(void)
   char *line = NULL;
   ssize_t bufsize = 0; // have getline allocate a buffer for us
   getline(&line, &bufsize, stdin);
+
+  // Check for '&'
+  if (strchr(line, '&') != NULL) {
+    background = 1;
+  }
+  else background = 0;
+
   return line;
 }
 
