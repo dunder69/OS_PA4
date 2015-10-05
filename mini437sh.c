@@ -1,8 +1,11 @@
-/*
-  Paolo Macias
-  CS 481 PA4
-  10/7/15
-*/
+/****************************/
+/* CS 481                   */
+/* Programming Assignment 4 */
+/* 7 October 2015           */
+/* Authors:                 */
+/*    Paolo Macias          */
+/*    Erin Sosebee          */
+/****************************/
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -14,8 +17,8 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#define MINI437_RL_BUFSIZE 1024
-#define MINI437_TOK_BUFSIZE 64
+#define MINI437_RL_BUFSIZE 80
+#define MINI437_TOK_BUFSIZE 80
 #define MINI437_TOK_DELIM " \t\r\n\a"
 
 char *history[10];
@@ -25,13 +28,10 @@ int background = 0; // flag for background processes
 /* Function declarations for built-in shell commands */
 int cd(char **args);
 int help(char **args);
-// void last10(int);
 int last10();
 int mini437_exit(char **args);
 
-/*
-  List of builtin commands, followed by their corresponding functions.
- */
+/* List of builtin commands, followed by their corresponding functions. */
 char *builtin_str[] = {
   "cd",
   "help",
@@ -50,11 +50,24 @@ int mini437_num_builtins() {
   return sizeof(builtin_str) / sizeof(char *);
 }
 
+/*******************/
+/* Signal handlers */
+/*******************/
+
 // Ctrl+C signal handler
 void sigint_handler(int signal)
 {
   printf("\n");
   last10();
+}
+
+// Background process handler
+void sigchld_handler(int signal)
+{
+  int pid;
+  int status;
+  pid = waitpid(pid, &status, WUNTRACED);
+  // printf("pid %d exit. \n", pid);
 }
 
 /************************************/
@@ -123,6 +136,9 @@ int mini437_exit(char **args)
   return 0;
 }
 
+/*********/
+/* Shell */
+/*********/
 
 //Launch a program and wait for it to terminate.
 int mini437_launch(char **args)
@@ -159,19 +175,25 @@ int mini437_launch(char **args)
     perror("mini437");
   } else { // Parent process
     do {
-      wpid = waitpid(pid, &status, WUNTRACED);
+      if (background) signal(SIGCHLD, sigchld_handler);
+      else {
+        wpid = waitpid(pid, &status, WUNTRACED);
+      }
     } while (!WIFEXITED(status) && !WIFSIGNALED(status));
   }
   
   // End process timing
-  getrusage(RUSAGE_SELF, &usage);
-  endUsrTime = usage.ru_utime;
-  endSysTime = usage.ru_stime;
+  if (!background) {
+    getrusage(RUSAGE_SELF, &usage);
+    endUsrTime = usage.ru_utime;
+    endSysTime = usage.ru_stime;
 
-  printf("PostRun(PID:%d): %s -- user time %d system time %d\n",
-    pid, args[0], 
-    (endUsrTime.tv_usec - startUsrTime.tv_usec), 
-    (endSysTime.tv_usec - startSysTime.tv_usec));
+    printf("PostRun(PID:%d): %s -- user time %d system time %d\n",
+      pid, args[0], 
+      (endUsrTime.tv_usec - startUsrTime.tv_usec), 
+      (endSysTime.tv_usec - startSysTime.tv_usec));
+  }
+  
   
   return 1;
 }
@@ -205,8 +227,13 @@ char *mini437_read_line(void)
   getline(&line, &bufsize, stdin);
 
   // Check for '&'
-  if (strchr(line, '&') != NULL) {
+  char *ampersand = strchr(line, '&');
+  if (ampersand != NULL) {
     background = 1;
+
+    // Subtract string address from character address to get index
+    int andIdx = (int) (ampersand - line); 
+    line[andIdx] = ' '; // Replace '&' with nothing so that command can run
   }
   else background = 0;
 
