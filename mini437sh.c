@@ -171,15 +171,23 @@ int mini437_launch(char **args)
       perror("mini437");
     }
     exit(EXIT_FAILURE);
-  } else if (pid < 0) { // Error forking
+  } 
+  else if (pid < 0) { // Error forking
     perror("mini437");
-  } else { // Parent process
-    do {
-      if (background) signal(SIGCHLD, sigchld_handler);
-      else {
-        wpid = waitpid(pid, &status, WUNTRACED);
+  } 
+  else { // Parent process
+    
+      if (background){ 
+        printf("in background\n");
+        signal(SIGINT, sigchld_handler);
+        return 1;
       }
-    } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+      else {
+        printf("in waitpid\n");
+        do {
+          wpid = waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+      } 
   }
   
   // End process timing
@@ -188,10 +196,14 @@ int mini437_launch(char **args)
     endUsrTime = usage.ru_utime;
     endSysTime = usage.ru_stime;
 
-    printf("PostRun(PID:%d): %s -- user time %d system time %d\n",
+    long int userTime = ((endUsrTime.tv_usec - startUsrTime.tv_usec)/1000);
+    long int sysTime = ((endSysTime.tv_usec - startSysTime.tv_usec)/1000);
+
+
+    printf("PostRun(PID:%d): %s -- user time %ld system time %ld\n",
       pid, args[0], 
-      (endUsrTime.tv_usec - startUsrTime.tv_usec), 
-      (endSysTime.tv_usec - startSysTime.tv_usec));
+      userTime, 
+      sysTime);
   }
   
   
@@ -237,6 +249,7 @@ char *mini437_read_line(void)
   }
   else background = 0;
 
+  printf("background = %d\n", background);
   return line;
 }
 
