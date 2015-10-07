@@ -22,8 +22,10 @@
 #define MINI437_TOK_DELIM " \t\r\n\a"
 
 char *history[10];
+pid_t pidAr[100];
+int cur_pid = 0;
 int histIt = 0; //history iterator
-int background = 0; // flag for background processes
+int background = 0; // flags if process should be in background or not
 
 /* Function declarations for built-in shell commands */
 int cd(char **args);
@@ -65,13 +67,12 @@ void sigint_handler(int signal)
 /* Bult-in function implementations */
 /************************************/
 
-// Change Directory 
+//Change Directory 
 int cd(char **args)
 {
   if (args[1] == NULL) {
     fprintf(stderr, "mini437: expected argument to \"cd\"\n");
-  } 
-  else {
+  } else {
     if (chdir(args[1]) != 0) {
       perror("mini437");
     }
@@ -79,8 +80,7 @@ int cd(char **args)
   return 1;
 }
 
-
-// Help
+//Help
 int help(char **args)
 {
   int i;
@@ -106,13 +106,17 @@ int last10()
   return 1;
 }
 
-//exits
+// Exits
 int mini437_exit(char **args)
 {
-  // TODO: Kill all background processes. 
   int i;
-  for(i=0;i<histIt;i++){
+  for(i=0;i<histIt;i++) {
     free(history[i]);
+  }
+
+  // Kills all processes currently running
+  for(i=0;i<cur_pid;i++) { 
+    kill(pidAr[i],SIGKILL);
   }
 
   return 0;
@@ -145,40 +149,7 @@ int mini437_launch(char **args)
     i++;
   }
   printf("\n");
-  
-  // pid = waitpid(-1, &status, WNOHANG);
-  // printf("pid: %d\n", pid);
-  // if (pid > 0) {
-  //   printf("waitpid reaped child pid %d\n", pid);
-  // }
 
-  // Begin executing process
-  pid = fork();
-  if (pid < 0) {
-    perror("mini437sh");
-    exit(EXIT_FAILURE);
-  } 
-  else if (pid == 0) {
-    execvp(args[0], args);
-    exit(EXIT_FAILURE);
-  }
-  else if (!background) {
-    pid = waitpid(pid, &status, 0);
-    if (pid > 0) {
-      getrusage(RUSAGE_SELF, &usage);
-      endUsrTime = usage.ru_utime;
-      endSysTime = usage.ru_stime;
-
-      float userTime = ((endUsrTime.tv_usec - startUsrTime.tv_usec));
-      float sysTime = ((endSysTime.tv_usec - startSysTime.tv_usec));
-
-      printf("PostRun(PID:%d): %s -- user time %2.4f system time %2.4f\n",
-        pid, args[0], 
-        userTime, 
-        sysTime);
-    }
-  }
-/*
   // Begin executing process
   pid = fork();
   if (pid == 0) { // Child process
@@ -191,18 +162,17 @@ int mini437_launch(char **args)
     perror("mini437");
   } 
   else { // Parent process
-    
-      if (background) { 
-        // printf("in background\n");
-        // signal(SIGINT, sigchld_handler);
-        return 1;
-      }
-      else {
-        // printf("in waitpid\n");
-        do {
-          wpid = waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-      } 
+
+    if (background) { 
+      pidAr[cur_pid] = pid;
+      cur_pid += 1;
+      signal(SIGCHLD, SIG_IGN);
+      return 1;
+    } else {
+      do {
+        wpid = waitpid(pid, &status, WUNTRACED);
+      } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    } 
   }
   
   // End process timing
@@ -210,26 +180,26 @@ int mini437_launch(char **args)
   endUsrTime = usage.ru_utime;
   endSysTime = usage.ru_stime;
 
-  long int userTime = ((endUsrTime.tv_usec - startUsrTime.tv_usec)/1000);
-  long int sysTime = ((endSysTime.tv_usec - startSysTime.tv_usec)/1000);
+  double userTime = ((double) (endUsrTime.tv_usec - startUsrTime.tv_usec) / 1000000);
+  double sysTime = ((double) (endSysTime.tv_usec - startSysTime.tv_usec) / 1000000);
 
-  printf("PostRun(PID:%d): %s -- user time %ld system time %ld\n",
+  printf("PostRun(PID:%d): %s -- user time %2.2g system time %2.2g\n",
     pid, args[0], 
     userTime, 
-    sysTime);*/
-  
+    sysTime);
   
   return 1;
 }
-
 
 //Execute shell built-in or launch program.
 int mini437_execute(char **args)
 {
   int i;
 
-  // An empty command was entered.
-  if (args[0] == NULL) return 1;
+  if (args[0] == NULL) {
+    // An empty command was entered.
+    return 1;
+  }
 
   for (i = 0; i < mini437_num_builtins(); i++) {
     if (strcmp(args[0], builtin_str[i]) == 0) {
@@ -239,7 +209,6 @@ int mini437_execute(char **args)
 
   return mini437_launch(args);
 }
-
 
 //Read a line of input from stdin.
 char *mini437_read_line(void)
@@ -259,11 +228,8 @@ char *mini437_read_line(void)
   }
   else background = 0;
 
-  // printf("background = %d\n", background);
   return line;
 }
-
-
 
 //Split a line into tokens (very naively).
 char **mini437_split_line(char *line)
@@ -297,26 +263,18 @@ char **mini437_split_line(char *line)
   return tokens;
 }
 
-
 //Loop getting input and executing it.
 void mini437_loop(void)
 {
   char *line;
   char **args;
-  int shellStatus, status;
-  pid_t pid;
+  int status;
 
   do {
-    pid = waitpid(-1, &status, WNOHANG);
-    // printf("pid: %d\n", pid);
-    if (pid > 0) {
-      printf("waitpid reaped child pid %d\n", pid); 
-    }
-
     printf("mini437-PM-ES > ");
     line = mini437_read_line();
     args = mini437_split_line(line);
-    shellStatus = mini437_execute(args);
+    status = mini437_execute(args);
 
     if (histIt < 10) {
       if (line != NULL && line[0] != '\n') {
@@ -338,13 +296,12 @@ void mini437_loop(void)
     free(line);
     free(args);
 
-  } while (shellStatus);
+  } while (status);
 }
-
 
 int main(int argc, char **argv)
 {
-  // signal(SIGINT, last10); //Ctrl + c handler
+  //Ctrl + c handler
   signal(SIGINT, sigint_handler);
 
   // Run command loop.
