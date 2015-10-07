@@ -17,8 +17,8 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#define MINI437_RL_BUFSIZE 80
-#define MINI437_TOK_BUFSIZE 80
+#define MINI437_RL_BUFSIZE 1024
+#define MINI437_TOK_BUFSIZE 64
 #define MINI437_TOK_DELIM " \t\r\n\a"
 
 char *history[10];
@@ -216,7 +216,7 @@ char *mini437_read_line(void)
   char *line = NULL;
   ssize_t bufsize = 0; // have getline allocate a buffer for us
   getline(&line, &bufsize, stdin);
-
+  
   // Check for '&'
   char *ampersand = strchr(line, '&');
   if (ampersand != NULL) {
@@ -224,10 +224,9 @@ char *mini437_read_line(void)
 
     // Subtract string address from character address to get index
     int andIdx = (int) (ampersand - line); 
-    line[andIdx] = ' '; // Replace '&' with nothing so that command can run
+    line[andIdx] = '\0'; // Replace '&' with nothing so that command can run
   }
   else background = 0;
-
   return line;
 }
 
