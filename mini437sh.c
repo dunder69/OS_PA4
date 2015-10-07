@@ -22,6 +22,8 @@
 #define MINI437_TOK_DELIM " \t\r\n\a"
 
 char *history[10];
+pid_t pidAr[100];
+int cur_pid = 0;
 int histIt = 0; //history iterator
 int background = 0; // flag for background processes
 
@@ -133,6 +135,10 @@ int mini437_exit(char **args)
     free(history[i]);
   }
 
+  for(i=0;i<cur_pid;i++){
+    kill(pidAr[i],SIGKILL);
+  }
+
   return 0;
 }
 
@@ -176,18 +182,18 @@ int mini437_launch(char **args)
     perror("mini437");
   } 
   else { // Parent process
-    
-      if (background){ 
-        printf("in background\n");
-        signal(SIGINT, sigchld_handler);
-        return 1;
-      }
-      else {
-        printf("in waitpid\n");
-        do {
-          wpid = waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-      } 
+
+    if (background){ 
+      pidAr[cur_pid] = pid;
+      cur_pid += 1;
+      signal(SIGCHLD, SIG_IGN);
+      return 1;
+    }
+    else {
+      do {
+        wpid = waitpid(pid, &status, WUNTRACED);
+      } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    } 
   }
   
   // End process timing
@@ -249,7 +255,6 @@ char *mini437_read_line(void)
   }
   else background = 0;
 
-  printf("background = %d\n", background);
   return line;
 }
 
