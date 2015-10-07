@@ -98,11 +98,16 @@ int help(char **args)
 // Shows the last 10 nonempty entered commands
 int last10()
 {
-  int i;
-  for (i = 0; i < histIt; i++) {
-    printf("%4d %s", (i+1), history[i]);
-    printf("\n");
-  }
+  int i = histIt;
+  int current = 1;
+
+  do {
+    if (history[i]) {
+      printf("%4d %s\n", current, history[i]);
+      current++;
+    } 
+    i = (i + 1) % 10;
+  } while (i != histIt);
   return 1;
 }
 
@@ -118,7 +123,6 @@ int mini437_exit(char **args)
   for(i=0;i<cur_pid;i++) { 
     kill(pidAr[i],SIGKILL);
   }
-
   return 0;
 }
 
@@ -196,8 +200,8 @@ int mini437_execute(char **args)
 {
   int i;
 
+  // An empty command was entered.
   if (args[0] == NULL) {
-    // An empty command was entered.
     return 1;
   }
 
@@ -216,7 +220,14 @@ char *mini437_read_line(void)
   char *line = NULL;
   ssize_t bufsize = 0; // have getline allocate a buffer for us
   getline(&line, &bufsize, stdin);
-  
+  line[strlen(line) - 1] = '\0'; // null terminate line
+
+  // If user input is not null, add it to history
+  if (strlen(line) > 1) { 
+    history[histIt] = strdup(line);
+    histIt = (histIt + 1) % 10;
+  }
+
   // Check for '&'
   char *ampersand = strchr(line, '&');
   if (ampersand != NULL) {
@@ -255,7 +266,6 @@ char **mini437_split_line(char *line)
         exit(EXIT_FAILURE);
       }
     }
-
     token = strtok(NULL, MINI437_TOK_DELIM);
   }
   tokens[position] = NULL;
@@ -274,23 +284,6 @@ void mini437_loop(void)
     line = mini437_read_line();
     args = mini437_split_line(line);
     status = mini437_execute(args);
-
-    if (histIt < 10) {
-      if (line != NULL && line[0] != '\n') {
-        history[histIt] = malloc(80);
-        strcpy(history[histIt], line);
-        histIt = histIt + 1;
-      }
-    }
-    else if(histIt >= 10) {
-      if (line != NULL && line[0] != '\n') {
-        int i;
-        for(i=1;i<10;i++){
-          strcpy(history[i-1], history[i]);
-        }
-        strcpy(history[9], line);
-      }
-    }
 
     free(line);
     free(args);
