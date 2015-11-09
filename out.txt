@@ -1,11 +1,11 @@
-PreRun: ls 
-fib
-fib.c
-mini437
-mini437sh_PM_ES.c
+/nfs/student/p/pmacia/os/pa4
+M_ES.c
 out.txt
+poop.txt
 README.md
-PostRun(PID:11333): ls -- user time  0 system time  0
-mini437-PM-ES > PreRun: exitr 
-PostRun(PID:11339): exitr -- user time  0 system time  0
-mini437-PM-ES > 
+----- 1 pmacia ugrad   943 Oct  6 20:07 fib.c
+-rwx------ 1 pmacia ugrad 14721 Nov  9 12:51 mini437
+-rw------- 1 pmacia ugrad  7715 Nov  9 12:51 mini437sh_PM_ES.c
+-rw------- 1 pmacia ugrad    63 Nov  9 12:59 out.txt
+-rw------- 1 pmacia ugrad    77 Nov  8 22:20 poop.txt
+-rw------- 1 pmacia ugrad    21 Sep 29 20:36 README.md

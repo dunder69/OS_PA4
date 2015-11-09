@@ -14,6 +14,10 @@
 #include <string.h>
 #include <signal.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <sys/time.h>
 #include <sys/resource.h>
 
@@ -135,6 +139,10 @@ int mini437_launch(char **args)
 {
   pid_t pid, wpid;
   int status;
+  int outarrow, inarrow, pipe = 0;
+  char outputLocation [1024];
+  char inputLocation [1024];
+  char inputFile [1024];
 
   struct rusage usage;
   struct timeval startUsrTime, endUsrTime;
@@ -150,6 +158,24 @@ int mini437_launch(char **args)
   int i = 1;
   while (args[i] != NULL) {
     printf("%d:%s, ", i, args[i]);
+    if (args[i][0]=='>'){
+      args[i] = '\0';
+      outarrow = 1;
+      strcpy(outputLocation,args[i+1]);
+      break;
+    } 
+    else if (args[i][0]=='<'){
+      args[i] = '\0';
+      inarrow = 1;
+      strcpy(inputFile,args[i+1]);
+      break;
+    } 
+    else if (args[i][0]=='|'){
+      args[i] = '\0';
+      pipe = 1;
+
+      break;
+    } 
     i++;
   }
   printf("\n");
@@ -157,6 +183,38 @@ int mini437_launch(char **args)
   // Begin executing process
   pid = fork();
   if (pid == 0) { // Child process
+
+    if(outarrow == 1){  
+      char cwd[1024];
+      getcwd(cwd, sizeof(cwd));
+      strcat(cwd,"/");
+      strcat(cwd, outputLocation);
+
+      int fd = open(cwd, O_WRONLY|O_CREAT, 0666);
+      dup2(fd, STDOUT_FILENO);
+      close(fd);
+      outarrow = 0;
+    }
+    if(inarrow == 1){  
+
+      int fd = open(inputFile, O_RDONLY, 0);
+      dup2(fd, STDIN_FILENO);
+      close(fd);
+      inarrow = 0;
+    }
+    if(pipe == 1){  
+      int fd1 = open("./temp.txt", O_WRONLY|O_CREAT, 0666);
+      dup2(fd1, STDOUT_FILENO);
+      close(fd1);
+
+      int fd2 = open("poop.txt", O_RDONLY, 0);
+      dup2(fd2, STDIN_FILENO);
+      close(fd2);
+      pipe = 0;
+      remove("temp.txt");
+    }
+
+
     if (execvp(args[0], args) == -1) {
       perror("mini437");
     }
@@ -239,22 +297,6 @@ char *mini437_read_line(void)
   }
   else background = 0;
 
-
-  //Read >
-  char *out = strchr(line, '>');
-  if(out !=NULL){
-
-    char cwd[1024];
-    if (getcwd(cwd, sizeof(cwd)) != NULL){
-      strcat(cwd, "/out.txt");
-      int fd = creat(cwd, 0644);
-      dup2(fd, STDOUT_FILENO);
-      close(fd);
-    }
-
-    int andIdx = (int) (out - line); 
-    line[andIdx] = '\0';
-  }
 
   return line;
 }
