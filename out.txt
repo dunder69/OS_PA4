@@ -1,0 +1,11 @@
+PreRun: ls 
+fib
+fib.c
+mini437
+mini437sh_PM_ES.c
+out.txt
+README.md
+PostRun(PID:11333): ls -- user time  0 system time  0
+mini437-PM-ES > PreRun: exitr 
+PostRun(PID:11339): exitr -- user time  0 system time  0
+mini437-PM-ES > 

@@ -238,6 +238,24 @@ char *mini437_read_line(void)
     line[andIdx] = '\0'; // Replace '&' with nothing so that command can run
   }
   else background = 0;
+
+
+  //Read >
+  char *out = strchr(line, '>');
+  if(out !=NULL){
+
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) != NULL){
+      strcat(cwd, "/out.txt");
+      int fd = creat(cwd, 0644);
+      dup2(fd, STDOUT_FILENO);
+      close(fd);
+    }
+
+    int andIdx = (int) (out - line); 
+    line[andIdx] = '\0';
+  }
+
   return line;
 }
 
