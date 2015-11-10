@@ -7,10 +7,11 @@
 /*    Erin Sosebee          */
 /****************************/
 
+#include <stdio.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <stdio.h>
+
 #include <string.h>
 #include <signal.h>
 
@@ -172,14 +173,13 @@ int mini437_launch(char **args)
     } 
     else if (args[i][0]=='|'){
       args[i] = '\0';
-      pipe = 1;
-
-      break;
+      pipe = i;
     } 
     i++;
   }
   printf("\n");
 
+  
   // Begin executing process
   pid = fork();
   if (pid == 0) { // Child process
@@ -202,20 +202,29 @@ int mini437_launch(char **args)
       close(fd);
       inarrow = 0;
     }
-    if(pipe == 1){  
-      int fd1 = open("./temp.txt", O_WRONLY|O_CREAT, 0666);
-      dup2(fd1, STDOUT_FILENO);
-      close(fd1);
-
-      int fd2 = open("poop.txt", O_RDONLY, 0);
-      dup2(fd2, STDIN_FILENO);
-      close(fd2);
-      pipe = 0;
-      remove("temp.txt");
+    if(pipe > 0){  
+      int pd[2];
+      pipe(pd);
+      int pipeFork = fork();
+      if(pipeFork == 0){
+        dup2(pd[0],0);
+        close(pd[1]);
+        char firstArgs[sizeof(args)];
+        int i = 0;
+        for(i=0;i<pipe;i++){
+          strcpy(firstArgs[i],args[i]);
+        }
+        execvp(firstArgs[0], firstArgs);
+      }
+      else{
+        dup2(pd[1], 1);
+        close(pd[0]);
+        execvp(args[pipe+1],args[pipe+1]);
+      }
     }
 
 
-    if (execvp(args[0], args) == -1) {
+    if (pipe == 0 && execvp(args[0], args) == -1) {
       perror("mini437");
     }
     exit(EXIT_FAILURE);
