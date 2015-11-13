@@ -140,7 +140,7 @@ int mini437_launch(char **args)
 {
   pid_t pid, wpid;
   int status;
-  int outarrow, inarrow, pipe = 0;
+  int outarrow, inarrow, pipeidx = 0;
   char outputLocation [1024];
   char inputLocation [1024];
   char inputFile [1024];
@@ -159,21 +159,25 @@ int mini437_launch(char **args)
   int i = 1;
   while (args[i] != NULL) {
     printf("%d:%s, ", i, args[i]);
+
+    //Detect ">"
     if (args[i][0]=='>'){
       args[i] = '\0';
       outarrow = 1;
       strcpy(outputLocation,args[i+1]);
       break;
     } 
+    //Detect "<"
     else if (args[i][0]=='<'){
       args[i] = '\0';
       inarrow = 1;
       strcpy(inputFile,args[i+1]);
       break;
     } 
+    //Detect "|"
     else if (args[i][0]=='|'){
       args[i] = '\0';
-      pipe = i;
+      pipeidx = i;
     } 
     i++;
   }
@@ -182,8 +186,10 @@ int mini437_launch(char **args)
   
   // Begin executing process
   pid = fork();
-  if (pid == 0) { // Child process
 
+  if (pid == 0) { // Child process
+    
+    //Redirect out
     if(outarrow == 1){  
       char cwd[1024];
       getcwd(cwd, sizeof(cwd));
@@ -195,6 +201,7 @@ int mini437_launch(char **args)
       close(fd);
       outarrow = 0;
     }
+    //Redirect in
     if(inarrow == 1){  
 
       int fd = open(inputFile, O_RDONLY, 0);
@@ -202,29 +209,49 @@ int mini437_launch(char **args)
       close(fd);
       inarrow = 0;
     }
-    if(pipe > 0){  
+    
+    //Handle piping
+    if(pipeidx > 0){  
+      
       int pd[2];
       pipe(pd);
       int pipeFork = fork();
+      
       if(pipeFork == 0){
         dup2(pd[0],0);
         close(pd[1]);
-        char firstArgs[sizeof(args)];
+
+        //Grabs all the args until the "|" symbol 
+        char* firstArgs[sizeof(args)];
         int i = 0;
-        for(i=0;i<pipe;i++){
+        for(i=0;i<pipeidx;i++){
+          firstArgs[i] = (char*) malloc(sizeof(args[i]));
           strcpy(firstArgs[i],args[i]);
+        }//executes them
+        if(execvp(firstArgs[0], firstArgs) == -1){
+          perror("mini437");
         }
-        execvp(firstArgs[0], firstArgs);
       }
       else{
         dup2(pd[1], 1);
         close(pd[0]);
-        execvp(args[pipe+1],args[pipe+1]);
+        int i = 0;
+
+        //Grabs all the args after the "|" symbol 
+        char* secondArgs[sizeof(args)];
+        for(i=pipeidx+1;i<sizeof(args);i++){
+          secondArgs[i] = (char*) malloc(sizeof(args[i]));
+          strcpy(secondArgs[i],args[i]);
+        }//executes them
+        if(execvp(secondArgs[0],secondArgs) == -1){
+          perror("mini437");
+        }
       }
+      pipeidx = 0;
     }
 
-
-    if (pipe == 0 && execvp(args[0], args) == -1) {
+    // If not piping, just run it normally
+    if (pipeidx == 0 && execvp(args[0], args) == -1) {
       perror("mini437");
     }
     exit(EXIT_FAILURE);
@@ -233,7 +260,6 @@ int mini437_launch(char **args)
     perror("mini437");
   } 
   else { // Parent process
-
     if (background) { 
       pidAr[cur_pid] = pid;
       cur_pid += 1;
